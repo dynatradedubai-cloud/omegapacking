@@ -18,9 +18,30 @@ if uploaded_order and uploaded_packing:
         order_df = pd.read_excel(uploaded_order)
         packing_df = pd.read_excel(uploaded_packing)
 
-        # Clean column names (remove spaces + uppercase)
-        order_df.columns = order_df.columns.str.strip().str.upper()
-        packing_df.columns = packing_df.columns.str.strip().str.upper()
+        # Clean column names (strip spaces + uppercase)
+        order_df.columns = order_df.columns.str.strip()
+        packing_df.columns = packing_df.columns.str.strip()
+
+        # Map actual Excel columns to standardized names
+        column_map_order = {
+            "Partnumber": "PARTNO",
+            "Brand": "BRAND",
+            "MANFPART": "MANFPART",
+            "Price": "PRICE"
+        }
+        order_df = order_df.rename(columns=column_map_order)
+
+        column_map_packing = {
+            "PartNo": "PARTNO",
+            "PartDesc": "PARTDESC",
+            "Quantity": "QUANTITY",
+            "CartonNo": "CARTONNO",
+            "Ref1": "REF1",
+            "Weight": "WEIGHT",
+            "NetValue": "NETVALUE",
+            "CrtWeight": "CRTNWEIGHT"
+        }
+        packing_df = packing_df.rename(columns=column_map_packing)
 
         # Required columns
         required_order_cols = ["PARTNO", "BRAND", "MANFPART", "PRICE"]
@@ -40,7 +61,7 @@ if uploaded_order and uploaded_packing:
                 st.error(f"Missing column in Packing list.xlsx: {col}")
                 st.stop()
 
-        # Remove zero quantity
+        # Remove zero quantity rows
         packing_df = packing_df[packing_df["QUANTITY"] > 0].copy()
 
         # Merge with fallback logic
