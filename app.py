@@ -1,16 +1,18 @@
-
+import streamlit as st
 import pandas as pd
 
+st.title("Final Packaging List Generator")
 
-def generate_final_packing_list(order_file, packing_file, output_file):
-    # Load Excel files
-    order_df = pd.read_excel(order_file, sheet_name=0)
-    packing_df = pd.read_excel(packing_file, sheet_name=0)
+uploaded_order = st.file_uploader("Upload Order list.xlsx", type=["xlsx"])
+uploaded_packing = st.file_uploader("Upload Packing list.xlsx", type=["xlsx"])
 
-    # Remove zero quantity rows
+if uploaded_order and uploaded_packing:
+
+    order_df = pd.read_excel(uploaded_order)
+    packing_df = pd.read_excel(uploaded_packing)
+
     packing_df = packing_df[packing_df["QUANTITY"] > 0].copy()
 
-    # Merge Order list for fallback values
     merged_df = packing_df.merge(
         order_df[["PARTNO", "Brand", "MANFPART", "Price"]],
         on="PARTNO",
@@ -18,17 +20,12 @@ def generate_final_packing_list(order_file, packing_file, output_file):
         suffixes=("", "_order")
     )
 
-    # Fallback logic
     merged_df["Brand"] = merged_df["Brand"].fillna(merged_df["Brand_order"])
     merged_df["MANFPART"] = merged_df["MANFPART"].fillna(merged_df["MANFPART_order"])
 
-    # Calculate UNIT PRICE
     merged_df["UNIT PRICE"] = merged_df["NETVALUE"] / merged_df["QUANTITY"]
-
-    # If UNIT PRICE missing, fallback to Order price
     merged_df["UNIT PRICE"] = merged_df["UNIT PRICE"].fillna(merged_df["Price"])
 
-    # Build final dataframe
     final_df = pd.DataFrame({
         "SL.NO": range(1, len(merged_df) + 1),
         "CARTONNO": merged_df["CARTONNO"],
@@ -48,15 +45,10 @@ def generate_final_packing_list(order_file, packing_file, output_file):
         "REFERENCES": ""
     })
 
-    # Save output
-    final_df.to_excel(output_file, sheet_name="Sheet1", index=False)
+    st.success("File Generated Successfully")
 
-    print(f"Final packaging list generated: {output_file}")
-
-
-if __name__ == "__main__":
-    order_file = "Order list.xlsx"
-    packing_file = "Packing list.xlsx"
-    output_file = "Final packaging list.xlsx"
-
-    generate_final_packing_list(order_file, packing_file, output_file)
+    st.download_button(
+        label="Download Final Packaging List",
+        data=final_df.to_excel(index=False),
+        file_name="Final packaging list.xlsx"
+    )
