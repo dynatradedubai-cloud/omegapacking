@@ -24,7 +24,7 @@ if uploaded_order and uploaded_packing:
 
         # Map actual Excel columns to standardized names
         column_map_order = {
-            "Partnumber": "PARTNO",
+            "PartNumber": "PARTNO",
             "Brand": "BRAND",
             "MANFPART": "MANFPART",
             "Price": "PRICE"
