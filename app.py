@@ -9,25 +9,13 @@ st.write("Upload both Excel files to generate the final packaging list.")
 uploaded_order = st.file_uploader("Upload Order list.xlsx", type=["xlsx"])
 uploaded_packing = st.file_uploader("Upload Packing list.xlsx", type=["xlsx"])
 
-if uploaded_order and uploaded_packing:
+if uploaded_packing:
     try:
-        # Load Excel files
-        order_df = pd.read_excel(uploaded_order)
+        # Load packing list
         packing_df = pd.read_excel(uploaded_packing)
-
-        # Clean column names
-        order_df.columns = order_df.columns.str.strip()
         packing_df.columns = packing_df.columns.str.strip()
-
-        # Map actual Excel columns to standardized names
-        # Order list: only PRICE and PARTNO needed
-        column_map_order = {
-            "Partnumber": "PARTNO",
-            "Price": "PRICE"
-        }
-        order_df = order_df.rename(columns=column_map_order)
-
-        # Packing list: full mapping
+        
+        # Map packing list columns
         column_map_packing = {
             "PartNo": "PARTNO",
             "PartDesc": "PARTDESC",
@@ -42,19 +30,12 @@ if uploaded_order and uploaded_packing:
         }
         packing_df = packing_df.rename(columns=column_map_packing)
 
-        # Required columns
-        required_order_cols = ["PARTNO", "PRICE"]
+        # Validate required packing columns
         required_packing_cols = [
             "CARTONNO", "PARTNO", "PARTDESC", "QUANTITY",
             "REF1", "WEIGHT", "NETVALUE", "CRTNWEIGHT",
             "MANFPART", "BRAND"
         ]
-
-        # Validate columns
-        for col in required_order_cols:
-            if col not in order_df.columns:
-                st.warning(f"Column '{col}' not found in Order list.xlsx — will ignore.")
-
         for col in required_packing_cols:
             if col not in packing_df.columns:
                 st.error(f"Missing column in Packing list.xlsx: {col}")
@@ -63,20 +44,42 @@ if uploaded_order and uploaded_packing:
         # Remove zero quantity rows
         packing_df = packing_df[packing_df["QUANTITY"] > 0].copy()
 
-        # Merge with Order list only for PRICE
-        merged_df = packing_df.merge(
-            order_df[["PARTNO", "PRICE"]],
-            on="PARTNO",
-            how="left"
-        )
+        # If Order list exists, read it
+        if uploaded_order:
+            order_df = pd.read_excel(uploaded_order)
+            order_df.columns = order_df.columns.str.strip()
+            # Map order list columns
+            column_map_order = {
+                "Partnumber": "PARTNO",
+                "Price": "PRICE"
+            }
+            order_df = order_df.rename(columns=column_map_order)
 
-        # BRAND and MANFPART always from Packing list
-        merged_df["BRAND"] = merged_df["BRAND"]
-        merged_df["MANFPART"] = merged_df["MANFPART"]
+            # Determine which columns exist
+            order_cols_to_use = []
+            if "PARTNO" in order_df.columns and "PRICE" in order_df.columns:
+                order_cols_to_use = ["PARTNO", "PRICE"]
 
-        # Calculate UNIT PRICE
-        merged_df["UNIT PRICE"] = merged_df["NETVALUE"] / merged_df["QUANTITY"]
-        merged_df["UNIT PRICE"] = merged_df["UNIT PRICE"].fillna(merged_df["PRICE"])
+            if order_cols_to_use:
+                merged_df = packing_df.merge(
+                    order_df[order_cols_to_use],
+                    on="PARTNO",
+                    how="left"
+                )
+                # BRAND and MANFPART always from packing list
+                merged_df["BRAND"] = merged_df["BRAND"]
+                merged_df["MANFPART"] = merged_df["MANFPART"]
+                # UNIT PRICE: use PRICE from order if NETVALUE/QUANTITY missing
+                merged_df["UNIT PRICE"] = merged_df["NETVALUE"] / merged_df["QUANTITY"]
+                merged_df["UNIT PRICE"] = merged_df["UNIT PRICE"].fillna(merged_df["PRICE"])
+            else:
+                st.warning("Order list.xlsx has no PARTNO or PRICE — ignoring it.")
+                merged_df = packing_df.copy()
+                merged_df["UNIT PRICE"] = merged_df["NETVALUE"] / merged_df["QUANTITY"]
+        else:
+            # No Order list uploaded
+            merged_df = packing_df.copy()
+            merged_df["UNIT PRICE"] = merged_df["NETVALUE"] / merged_df["QUANTITY"]
 
         # Build final DataFrame
         final_df = pd.DataFrame({
