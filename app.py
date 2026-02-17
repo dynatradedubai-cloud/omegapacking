@@ -15,25 +15,10 @@ if uploaded_packing:
         packing_df = pd.read_excel(uploaded_packing)
         packing_df.columns = packing_df.columns.str.strip().str.upper()
 
-        # Rename packing columns to standard names
-        column_map_packing = {
-            "PARTNO": "PARTNO",
-            "PARTDESC": "PARTDESC",
-            "QUANTITY": "QUANTITY",
-            "CARTONNO": "CARTONNO",
-            "REF1": "REF1",
-            "WEIGHT": "WEIGHT",
-            "NETVALUE": "NETVALUE",
-            "CRTNWEIGHT": "CRTNWEIGHT",
-            "MANFPART": "MANFPART"
-        }
-        packing_df = packing_df.rename(columns=column_map_packing)
-
-        # Validate required packing columns
+        # Validate packing columns
         required_packing_cols = [
             "CARTONNO", "PARTNO", "PARTDESC", "QUANTITY",
-            "REF1", "WEIGHT", "NETVALUE", "CRTNWEIGHT",
-            "MANFPART"
+            "REF1", "WEIGHT", "NETVALUE", "CRTNWEIGHT", "MANFPART"
         ]
         for col in required_packing_cols:
             if col not in packing_df.columns:
@@ -43,29 +28,33 @@ if uploaded_packing:
         # Remove zero quantity rows
         packing_df = packing_df[packing_df["QUANTITY"] > 0].copy()
 
-        # Initialize BRAND column as blank
+        # Initialize BRAND column
         packing_df["BRAND"] = ""
 
-        # Load Order list if provided
+        # Load Order list
         if uploaded_order:
             order_df = pd.read_excel(uploaded_order)
             order_df.columns = order_df.columns.str.strip().str.upper()
 
-            # Standardize Order list column names
-            order_df = order_df.rename(columns={
-                "PARTNUMBER": "PARTNO",
-                "PART NUMBER": "PARTNO",
-                "PART_NO": "PARTNO",
-                "BRAND": "BRAND",
-                "PRICE-AED": "PRICE",
-                "PRICE": "PRICE"
-            })
+            # Fix PARTNO column
+            if "PARTNUMBER" in order_df.columns:
+                order_df = order_df.rename(columns={"PARTNUMBER": "PARTNO"})
 
-            # Keep only relevant columns
-            keep_cols = [col for col in ["PARTNO", "BRAND", "PRICE"] if col in order_df.columns]
-            order_df = order_df[keep_cols]
+            # Fix BRAND column
+            if "BRAND" not in order_df.columns:
+                st.error("Order list is missing BRAND column.")
+                st.stop()
 
-            # Merge Packing list with Order list on PARTNO
+            # Fix PRICE column (optional)
+            if "PRICE-AED" in order_df.columns:
+                order_df = order_df.rename(columns={"PRICE-AED": "PRICE"})
+            elif "PRICE" not in order_df.columns:
+                order_df["PRICE"] = None
+
+            # Keep only needed columns
+            order_df = order_df[["PARTNO", "BRAND", "PRICE"]]
+
+            # Merge
             merged_df = pd.merge(
                 packing_df,
                 order_df,
@@ -82,7 +71,7 @@ if uploaded_packing:
         merged_df["MANFPART"] = merged_df["MANFPART"].fillna(merged_df["PARTNO"])
         merged_df.loc[merged_df["MANFPART"].astype(str).str.strip() == "", "MANFPART"] = merged_df["PARTNO"]
 
-        # UNIT PRICE calculation
+        # UNIT PRICE
         merged_df["UNIT PRICE"] = merged_df["NETVALUE"] / merged_df["QUANTITY"]
         if "PRICE" in merged_df.columns:
             merged_df["UNIT PRICE"] = merged_df["UNIT PRICE"].fillna(merged_df["PRICE"])
@@ -91,7 +80,7 @@ if uploaded_packing:
         final_df = pd.DataFrame({
             "SL.NO": range(1, len(merged_df) + 1),
             "CARTONNO": merged_df["CARTONNO"],
-            "Brand": merged_df["BRAND"],  # strictly from Order list
+            "Brand": merged_df["BRAND"],
             "PARTNO": merged_df["PARTNO"],
             "PART DESC": merged_df["PARTDESC"],
             "COO": "",
@@ -107,7 +96,7 @@ if uploaded_packing:
             "REFERENCES": ""
         })
 
-        # Convert to Excel in memory
+        # Convert to Excel
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
             final_df.to_excel(writer, index=False, sheet_name="Sheet1")
@@ -123,3 +112,4 @@ if uploaded_packing:
 
     except Exception as e:
         st.error(f"Error: {e}")
+
