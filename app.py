@@ -1,59 +1,84 @@
+import streamlit as st
 import pandas as pd
+import io
 
-def generate_final_packing_list(order_file, packing_file, output_file):
-    # Load sheets
-    order_df = pd.read_excel(order_file, sheet_name=0)
-    packing_df = pd.read_excel(packing_file, sheet_name=0)
+st.set_page_config(page_title="Final Packaging List Generator")
+st.title("Final Packaging List Generator")
+st.write("Upload both Excel files to generate the final packaging list.")
 
-    # Remove zero quantity rows
-    packing_df = packing_df[packing_df["QUANTITY"] > 0].copy()
+# Upload files
+uploaded_order = st.file_uploader("Upload Order list.xlsx", type=["xlsx"])
+uploaded_packing = st.file_uploader("Upload Packing list.xlsx", type=["xlsx"])
 
-    # Calculate unit price from NETVALUE / QUANTITY
-    packing_df["UNIT PRICE"] = packing_df["NETVALUE"] / packing_df["QUANTITY"]
+if uploaded_order and uploaded_packing:
+    try:
+        # Load packing list
+        packing_df = pd.read_excel(uploaded_packing, engine="openpyxl")
+        packing_df.columns = packing_df.columns.str.strip()
 
-    # Ensure Brand column comes strictly from Order list
-    if "Brand" in order_df.columns:
+        # Remove zero quantity rows
+        packing_df = packing_df[packing_df["QUANTITY"] > 0].copy()
+
+        # Calculate UNIT PRICE
+        packing_df["UNIT PRICE"] = packing_df["NETVALUE"] / packing_df["QUANTITY"]
+
+        # Load Order list
+        order_df = pd.read_excel(uploaded_order, engine="openpyxl")
+        order_df.columns = order_df.columns.str.strip()
+
+        # Check Brand exists in Order list
+        if "Brand" not in order_df.columns:
+            st.error("Order list.xlsx must contain 'Brand' column.")
+            st.stop()
+
+        # Ensure row count matches to avoid mismatch
         if len(order_df) != len(packing_df):
-            raise ValueError("Row count mismatch: Order list and Packing list must have the same number of rows.")
-        packing_df["Brand"] = order_df["Brand"]
-    else:
-        raise ValueError("Order list.xlsx must contain 'Brand' column.")
+            st.warning("Row count mismatch! Brand will be assigned by order of rows.")
+            # Optionally, you can truncate or pad Order list to match Packing list length
+            min_len = min(len(order_df), len(packing_df))
+            packing_df["Brand"] = order_df["Brand"].iloc[:min_len].reset_index(drop=True)
+        else:
+            # Assign Brand strictly from Order list
+            packing_df["Brand"] = order_df["Brand"].values
 
-    # MANFPART: if blank, copy PARTNO
-    packing_df["MANFPART"] = packing_df["MANFPART"].fillna(packing_df["PARTNO"])
-    packing_df.loc[packing_df["MANFPART"].astype(str).str.strip() == "", "MANFPART"] = packing_df["PARTNO"]
+        # MANFPART: if blank, copy PARTNO
+        packing_df["MANFPART"] = packing_df["MANFPART"].fillna(packing_df["PARTNO"])
+        packing_df.loc[packing_df["MANFPART"].astype(str).str.strip() == "", "MANFPART"] = packing_df["PARTNO"]
 
-    # Build final DataFrame using required column order
-    final_df = pd.DataFrame({
-        "SL.NO": range(1, len(packing_df) + 1),
-        "CARTONNO": packing_df["CARTONNO"],
-        "Brand": packing_df["Brand"],  # strictly from Order list
-        "PARTNO": packing_df["PARTNO"],
-        "PART DESC": packing_df["PARTDESC"],
-        "COO": "",  # left blank
-        "QTY": packing_df["QUANTITY"],
-        "REF1": packing_df["REF1"],
-        "WEIGHT": packing_df["WEIGHT"],
-        "HSCODE": "87089900",
-        "UNIT PRICE": packing_df["UNIT PRICE"],
-        "AMOUNT AED": packing_df["NETVALUE"],
-        "MANFPART": packing_df["MANFPART"],
-        "CRTN WEIGHT": packing_df["CRTNWEIGHT"],
-        "ORDER NUMBER": "",  # left blank
-        "REFERENCES": ""  # left blank
-    })
+        # Build final DataFrame
+        final_df = pd.DataFrame({
+            "SL.NO": range(1, len(packing_df) + 1),
+            "CARTONNO": packing_df["CARTONNO"],
+            "Brand": packing_df["Brand"],  # strictly from Order list
+            "PARTNO": packing_df["PARTNO"],
+            "PART DESC": packing_df["PARTDESC"],
+            "COO": "",
+            "QTY": packing_df["QUANTITY"],
+            "REF1": packing_df["REF1"],
+            "WEIGHT": packing_df["WEIGHT"],
+            "HSCODE": "87089900",
+            "UNIT PRICE": packing_df["UNIT PRICE"],
+            "AMOUNT AED": packing_df["NETVALUE"],
+            "MANFPART": packing_df["MANFPART"],
+            "CRTN WEIGHT": packing_df["CRTNWEIGHT"],
+            "ORDER NUMBER": "",
+            "REFERENCES": ""
+        })
 
-    # Save output
-    final_df.to_excel(output_file, index=False)
-    print(f"Final packaging list generated: {output_file}")
+        # Export to Excel in memory
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            final_df.to_excel(writer, index=False, sheet_name="Sheet1")
+        output.seek(0)
 
+        st.success("Final Packaging List Generated Successfully")
+        st.download_button(
+            label="Download Final Packaging List",
+            data=output,
+            file_name="Final packaging list.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
-if __name__ == "__main__":
-    # File names
-    order_file = "Order list.xlsx"
-    packing_file = "Packing list.xlsx"
-    output_file = "Final packaging list.xlsx"
-
-    generate_final_packing_list(order_file, packing_file, output_file)
-
+    except Exception as e:
+        st.error(f"Error: {e}")
 
