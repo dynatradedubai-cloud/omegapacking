@@ -10,9 +10,8 @@ uploaded_order = st.file_uploader("Upload Order list.xlsx", type=["xlsx"])
 uploaded_packing = st.file_uploader("Upload Packing list.xlsx", type=["xlsx"])
 
 if uploaded_order and uploaded_packing:
-
     try:
-        # Read files
+        # Load Excel files
         order_df = pd.read_excel(uploaded_order)
         packing_df = pd.read_excel(uploaded_packing)
 
@@ -21,14 +20,14 @@ if uploaded_order and uploaded_packing:
         packing_df.columns = packing_df.columns.str.strip()
 
         # Map actual Excel columns to standardized names
+        # Order list: only PRICE and PARTNO needed
         column_map_order = {
-            "PartNumber": "PARTNO",
-            "Brand": "BRAND",
-            "Price-AED": "PRICE"
-            # MANFPART intentionally ignored
+            "Partnumber": "PARTNO",
+            "Price": "PRICE"
         }
         order_df = order_df.rename(columns=column_map_order)
 
+        # Packing list: full mapping
         column_map_packing = {
             "PartNo": "PARTNO",
             "PartDesc": "PARTDESC",
@@ -38,22 +37,23 @@ if uploaded_order and uploaded_packing:
             "Weight": "WEIGHT",
             "NetValue": "NETVALUE",
             "CrtWeight": "CRTNWEIGHT",
-            "MANFPART": "MANFPART"  # Use from packing only
+            "MANFPART": "MANFPART",
+            "Brand": "BRAND"
         }
         packing_df = packing_df.rename(columns=column_map_packing)
 
         # Required columns
-        required_order_cols = ["PARTNO", "BRAND", "PRICE"]  # MANFPART removed
+        required_order_cols = ["PARTNO", "PRICE"]
         required_packing_cols = [
             "CARTONNO", "PARTNO", "PARTDESC", "QUANTITY",
-            "REF1", "WEIGHT", "NETVALUE", "CRTNWEIGHT", "MANFPART"
+            "REF1", "WEIGHT", "NETVALUE", "CRTNWEIGHT",
+            "MANFPART", "BRAND"
         ]
 
         # Validate columns
         for col in required_order_cols:
             if col not in order_df.columns:
-                st.error(f"Missing column in Order list.xlsx: {col}")
-                st.stop()
+                st.warning(f"Column '{col}' not found in Order list.xlsx — will ignore.")
 
         for col in required_packing_cols:
             if col not in packing_df.columns:
@@ -63,17 +63,15 @@ if uploaded_order and uploaded_packing:
         # Remove zero quantity rows
         packing_df = packing_df[packing_df["QUANTITY"] > 0].copy()
 
-        # Merge with fallback logic
+        # Merge with Order list only for PRICE
         merged_df = packing_df.merge(
-            order_df[required_order_cols],
+            order_df[["PARTNO", "PRICE"]],
             on="PARTNO",
-            how="left",
-            suffixes=("", "_ORDER")
+            how="left"
         )
 
-        # Fallback handling
-        merged_df["BRAND"] = merged_df["BRAND"].fillna(merged_df["BRAND_ORDER"])
-        # MANFPART always from packing_df
+        # BRAND and MANFPART always from Packing list
+        merged_df["BRAND"] = merged_df["BRAND"]
         merged_df["MANFPART"] = merged_df["MANFPART"]
 
         # Calculate UNIT PRICE
@@ -107,7 +105,6 @@ if uploaded_order and uploaded_packing:
         output.seek(0)
 
         st.success("Final Packaging List Generated Successfully")
-
         st.download_button(
             label="Download Final Packaging List",
             data=output,
