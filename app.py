@@ -51,31 +51,31 @@ if uploaded_packing:
             order_df = pd.read_excel(uploaded_order)
             order_df.columns = order_df.columns.str.strip()
 
-            # Map order list columns (PARTNO, BRAND, PRICE)
+            # Map Order list columns
             column_map_order = {
                 "Partnumber": "PARTNO",
+                "PartNumber": "PARTNO",
+                "PARTNO": "PARTNO",
                 "Brand": "BRAND",
+                "PRICE": "PRICE",
                 "Price": "PRICE"
             }
             order_df = order_df.rename(columns=column_map_order)
 
-            # Only merge BRAND and PRICE if PARTNO exists in Order list
+            # Only merge BRAND and PRICE if PARTNO exists in both
             if "PARTNO" in order_df.columns:
-                merge_cols = ["PARTNO"]
-                if "BRAND" in order_df.columns:
-                    merge_cols.append("BRAND")
-                if "PRICE" in order_df.columns:
-                    merge_cols.append("PRICE")
+                # Keep only PARTNO, BRAND, PRICE from order
+                order_merge = order_df[["PARTNO"] + [c for c in ["BRAND", "PRICE"] if c in order_df.columns]]
 
                 merged_df = packing_df.merge(
-                    order_df[merge_cols],
+                    order_merge,
                     on="PARTNO",
                     how="left",
                     suffixes=("", "_ORDER")
                 )
 
-                # BRAND strictly from Order list, leave blank if missing
-                if "BRAND" in merge_cols:
+                # BRAND strictly from Order list
+                if "BRAND" in merged_df.columns:
                     merged_df["BRAND"] = merged_df["BRAND"]
                 else:
                     merged_df["BRAND"] = ""
