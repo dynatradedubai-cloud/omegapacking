@@ -24,7 +24,7 @@ if uploaded_order and uploaded_packing:
         column_map_order = {
             "PartNumber": "PARTNO",
             "Brand": "BRAND",
-            "Price": "PRICE"
+            "Price-AED": "PRICE"
             # MANFPART intentionally ignored
         }
         order_df = order_df.rename(columns=column_map_order)
