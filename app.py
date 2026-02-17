@@ -59,7 +59,7 @@ if uploaded_packing:
             }
             order_df = order_df.rename(columns=column_map_order)
 
-            # Only merge if PARTNO exists in Order list
+            # Only merge BRAND and PRICE if PARTNO exists in Order list
             if "PARTNO" in order_df.columns:
                 merge_cols = ["PARTNO"]
                 if "BRAND" in order_df.columns:
@@ -74,9 +74,11 @@ if uploaded_packing:
                     suffixes=("", "_ORDER")
                 )
 
-                # BRAND: take only from Order list, do not fallback
-                if "BRAND_ORDER" in merged_df.columns:
-                    merged_df["BRAND"] = merged_df["BRAND_ORDER"]
+                # BRAND strictly from Order list, leave blank if missing
+                if "BRAND" in merge_cols:
+                    merged_df["BRAND"] = merged_df["BRAND"]
+                else:
+                    merged_df["BRAND"] = ""
             else:
                 st.warning("Order list.xlsx does not contain PARTNO — BRAND will be blank.")
                 merged_df = packing_df.copy()
@@ -96,7 +98,7 @@ if uploaded_packing:
         final_df = pd.DataFrame({
             "SL.NO": range(1, len(merged_df) + 1),
             "CARTONNO": merged_df["CARTONNO"],
-            "Brand": merged_df["BRAND"],
+            "Brand": merged_df["BRAND"],  # strictly from Order list
             "PARTNO": merged_df["PARTNO"],
             "PART DESC": merged_df["PARTDESC"],
             "COO": "",
@@ -128,4 +130,3 @@ if uploaded_packing:
 
     except Exception as e:
         st.error(f"Error: {e}")
-
