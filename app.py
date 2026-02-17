@@ -13,43 +13,51 @@ if uploaded_packing and uploaded_order:
     try:
         # Load packing list
         packing_df = pd.read_excel(uploaded_packing)
-        packing_df.columns = packing_df.columns.str.strip()
-
-        # Map packing list columns
+        packing_df.columns = packing_df.columns.str.strip().str.upper().str.replace(" ", "")
+        
+        # Define standard column mapping for packing list
         column_map_packing = {
-            "PartDesc": "PARTDESC",
-            "Quantity": "QUANTITY",
-            "CartonNo": "CARTONNO",
-            "Ref1": "REF1",
-            "Weight": "WEIGHT",
-            "NetValue": "NETVALUE",
-            "CrtWeight": "CRTNWEIGHT",
+            "PARTDESC": "PARTDESC",
+            "QUANTITY": "QUANTITY",
+            "CARTONNO": "CARTONNO",
+            "REF1": "REF1",
+            "WEIGHT": "WEIGHT",
+            "NETVALUE": "NETVALUE",
+            "CRTNWEIGHT": "CRTNWEIGHT",
             "MANFPART": "MANFPART"
         }
-        packing_df = packing_df.rename(columns=column_map_packing)
+
+        # Check all mapped columns exist in packing_df
+        for col in column_map_packing.keys():
+            if col not in packing_df.columns:
+                st.error(f"Packing list missing column: {col}")
+                st.stop()
+
+        # Keep only required columns
+        packing_df = packing_df[list(column_map_packing.keys())].copy()
 
         # Remove zero quantity rows
         packing_df = packing_df[packing_df["QUANTITY"] > 0].copy()
 
         # Load Order list
         order_df = pd.read_excel(uploaded_order)
-        order_df.columns = order_df.columns.str.strip()
+        order_df.columns = order_df.columns.str.strip().str.upper().str.replace(" ", "")
 
-        # Map Order list columns
-        # "Partref" (J column) becomes PARTNO in final
-        # "Brand" copied to Brand column in final
-        if "Partref" not in order_df.columns or "Brand" not in order_df.columns:
+        # Check Order list has Partref and Brand
+        if "PARTREF" not in order_df.columns or "BRAND" not in order_df.columns:
             st.error("Order list must contain 'Partref' and 'Brand' columns.")
             st.stop()
 
-        order_df = order_df[["Partref", "Brand"]]
-        order_df = order_df.rename(columns={"Partref": "PARTNO", "Brand": "BRAND"})
+        # Prepare Order list for merge
+        order_df = order_df[["PARTREF", "BRAND"]].copy()
+        order_df = order_df.rename(columns={"PARTREF": "PARTNO", "BRAND": "BRAND"})
 
-        # Build final DataFrame
-        # Merge Packing list with Order list on row index (assume same order) if needed
+        # Add PARTNO and Brand to packing list
         final_df = packing_df.copy()
-        final_df["PARTNO"] = order_df["PARTNO"]
-        final_df["Brand"] = order_df["BRAND"]
+        if len(order_df) != len(final_df):
+            st.warning("Row count mismatch! Matching by order of rows.")
+        final_df["PARTNO"] = order_df["PARTNO"].values
+        final_df["Brand"] = order_df["BRAND"].values
 
         # MANFPART: if blank, copy PARTNO
         final_df["MANFPART"] = final_df["MANFPART"].fillna(final_df["PARTNO"])
@@ -58,38 +66,42 @@ if uploaded_packing and uploaded_order:
         # UNIT PRICE calculation
         final_df["UNIT PRICE"] = final_df["NETVALUE"] / final_df["QUANTITY"]
 
-        # Build final columns in order
+        # Add fixed columns
+        final_df["HSCODE"] = "87089900"
+        final_df["COO"] = ""
+        final_df["ORDER NUMBER"] = ""
+        final_df["REFERENCES"] = ""
+
+        # Reorder columns for final sheet
         final_df = final_df[[
-            "CartonNo",  # CARTONNO
-            "Brand",
             "PARTNO",
+            "Brand",
             "PARTDESC",
             "QUANTITY",
+            "CARTONNO",
             "REF1",
             "WEIGHT",
             "MANFPART",
             "CRTNWEIGHT",
             "UNIT PRICE",
-            "NETVALUE"
+            "NETVALUE",
+            "HSCODE",
+            "COO",
+            "ORDER NUMBER",
+            "REFERENCES"
         ]]
-
-        # Rename columns to match final packaging list
-        final_df = final_df.rename(columns={
-            "CartonNo": "CARTONNO",
-            "PARTDESC": "PART DESC",
-            "QUANTITY": "QTY",
-            "CRTNWEIGHT": "CRTN WEIGHT",
-            "NETVALUE": "AMOUNT AED"
-        })
-
-        # Add fixed columns
-        final_df.insert(8, "HSCODE", "87089900")
-        final_df.insert(9, "COO", "")
-        final_df.insert(10, "ORDER NUMBER", "")
-        final_df.insert(11, "REFERENCES", "")
 
         # Add SL.NO
         final_df.insert(0, "SL.NO", range(1, len(final_df) + 1))
+
+        # Rename columns to match final packaging list exactly
+        final_df = final_df.rename(columns={
+            "PARTDESC": "PART DESC",
+            "QUANTITY": "QTY",
+            "CRTNWEIGHT": "CRTN WEIGHT",
+            "NETVALUE": "AMOUNT AED",
+            "CARTONNO": "CARTONNO"
+        })
 
         # Export to Excel in memory
         output = io.BytesIO()
@@ -107,3 +119,5 @@ if uploaded_packing and uploaded_order:
 
     except Exception as e:
         st.error(f"Error: {e}")
+
+
