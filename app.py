@@ -17,7 +17,7 @@ if uploaded_packing:
         
         # Map packing list columns
         column_map_packing = {
-            "PartNumber": "PARTNO",
+            "PartNo": "PARTNO",
             "PartDesc": "PARTDESC",
             "Quantity": "QUANTITY",
             "CartonNo": "CARTONNO",
