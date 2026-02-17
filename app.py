@@ -26,20 +26,16 @@ if uploaded_order and uploaded_packing:
         order_df = pd.read_excel(uploaded_order, engine="openpyxl")
         order_df.columns = order_df.columns.str.strip()
 
-        # Check Brand exists in Order list
-        if "Brand" not in order_df.columns:
-            st.error("Order list.xlsx must contain 'Brand' column.")
+        # Check required columns in Order list
+        if "Partref" not in order_df.columns or "Brand" not in order_df.columns:
+            st.error("Order list.xlsx must contain 'Partref' and 'Brand' columns.")
             st.stop()
 
-        # Ensure row count matches to avoid mismatch
-        if len(order_df) != len(packing_df):
-            st.warning("Row count mismatch! Brand will be assigned by order of rows.")
-            # Optionally, you can truncate or pad Order list to match Packing list length
-            min_len = min(len(order_df), len(packing_df))
-            packing_df["Brand"] = order_df["Brand"].iloc[:min_len].reset_index(drop=True)
-        else:
-            # Assign Brand strictly from Order list
-            packing_df["Brand"] = order_df["Brand"].values
+        # Create a mapping: Partref -> Brand
+        brand_map = order_df.set_index("Partref")["Brand"].to_dict()
+
+        # Assign Brand to packing_df based on PARTNO
+        packing_df["Brand"] = packing_df["PARTNO"].map(brand_map)
 
         # MANFPART: if blank, copy PARTNO
         packing_df["MANFPART"] = packing_df["MANFPART"].fillna(packing_df["PARTNO"])
@@ -49,7 +45,7 @@ if uploaded_order and uploaded_packing:
         final_df = pd.DataFrame({
             "SL.NO": range(1, len(packing_df) + 1),
             "CARTONNO": packing_df["CARTONNO"],
-            "Brand": packing_df["Brand"],  # strictly from Order list
+            "Brand": packing_df["Brand"],  # mapped from Order list
             "PARTNO": packing_df["PARTNO"],
             "PART DESC": packing_df["PARTDESC"],
             "COO": "",
@@ -81,4 +77,3 @@ if uploaded_order and uploaded_packing:
 
     except Exception as e:
         st.error(f"Error: {e}")
-
