@@ -1,5 +1,8 @@
 import streamlit as st
 import pandas as pd
+import io
+
+st.set_page_config(page_title="Final Packaging List Generator")
 
 st.title("Final Packaging List Generator")
 
@@ -45,10 +48,17 @@ if uploaded_order and uploaded_packing:
         "REFERENCES": ""
     })
 
+    # Convert dataframe to Excel in memory
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        final_df.to_excel(writer, index=False, sheet_name="Sheet1")
+    output.seek(0)
+
     st.success("File Generated Successfully")
 
     st.download_button(
         label="Download Final Packaging List",
-        data=final_df.to_excel(index=False),
-        file_name="Final packaging list.xlsx"
+        data=output,
+        file_name="Final packaging list.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
