@@ -13,18 +13,18 @@ if uploaded_packing:
     try:
         # Load packing list
         packing_df = pd.read_excel(uploaded_packing)
-        packing_df.columns = packing_df.columns.str.strip()
+        packing_df.columns = packing_df.columns.str.strip().str.upper()
 
-        # Map packing list columns
+        # Rename packing columns to standard names
         column_map_packing = {
-            "PartNo": "PARTNO",
-            "PartDesc": "PARTDESC",
-            "Quantity": "QUANTITY",
-            "CartonNo": "CARTONNO",
-            "Ref1": "REF1",
-            "Weight": "WEIGHT",
-            "NetValue": "NETVALUE",
-            "CrtWeight": "CRTNWEIGHT",
+            "PARTNO": "PARTNO",
+            "PARTDESC": "PARTDESC",
+            "QUANTITY": "QUANTITY",
+            "CARTONNO": "CARTONNO",
+            "REF1": "REF1",
+            "WEIGHT": "WEIGHT",
+            "NETVALUE": "NETVALUE",
+            "CRTNWEIGHT": "CRTNWEIGHT",
             "MANFPART": "MANFPART"
         }
         packing_df = packing_df.rename(columns=column_map_packing)
@@ -49,46 +49,36 @@ if uploaded_packing:
         # Load Order list if provided
         if uploaded_order:
             order_df = pd.read_excel(uploaded_order)
-            order_df.columns = order_df.columns.str.strip()
+            order_df.columns = order_df.columns.str.strip().str.upper()
 
-            # Standardize column names in Order list
-            column_map_order = {
-                "Partnumber": "PARTNO",
-                "PartNumber": "PARTNO",
-                "PARTNO": "PARTNO",
-                "Brand": "BRAND",
-                "PRICE": "PRICE",
-                "Price": "PRICE"
-            }
-            order_df = order_df.rename(columns=column_map_order)
+            # Standardize Order list column names
+            order_df = order_df.rename(columns={
+                "PARTNUMBER": "PARTNO",
+                "PART NUMBER": "PARTNO",
+                "PART_NO": "PARTNO",
+                "BRAND": "BRAND",
+                "PRICE-AED": "PRICE",
+                "PRICE": "PRICE"
+            })
 
             # Keep only relevant columns
-            order_cols = ["PARTNO"]
-            if "BRAND" in order_df.columns:
-                order_cols.append("BRAND")
-            if "PRICE" in order_df.columns:
-                order_cols.append("PRICE")
-
-            order_df = order_df[order_cols]
+            keep_cols = [col for col in ["PARTNO", "BRAND", "PRICE"] if col in order_df.columns]
+            order_df = order_df[keep_cols]
 
             # Merge Packing list with Order list on PARTNO
             merged_df = pd.merge(
                 packing_df,
                 order_df,
                 on="PARTNO",
-                how="left",
-                suffixes=("", "_ORDER")
+                how="left"
             )
 
-            # BRAND strictly from Order list (no fallback)
-            if "BRAND" in merged_df.columns:
-                merged_df["BRAND"] = merged_df["BRAND"]
-            else:
-                merged_df["BRAND"] = ""
+            # BRAND strictly from Order list
+            merged_df["BRAND"] = merged_df["BRAND"].fillna("")
         else:
             merged_df = packing_df.copy()
 
-        # MANFPART: if blank, copy PARTNO
+        # MANFPART fallback
         merged_df["MANFPART"] = merged_df["MANFPART"].fillna(merged_df["PARTNO"])
         merged_df.loc[merged_df["MANFPART"].astype(str).str.strip() == "", "MANFPART"] = merged_df["PARTNO"]
 
