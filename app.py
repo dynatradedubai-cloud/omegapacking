@@ -1,123 +1,59 @@
-import streamlit as st
 import pandas as pd
-import io
 
-st.set_page_config(page_title="Final Packaging List Generator")
-st.title("Final Packaging List Generator")
-st.write("Upload both Excel files to generate the final packaging list.")
+def generate_final_packing_list(order_file, packing_file, output_file):
+    # Load sheets
+    order_df = pd.read_excel(order_file, sheet_name=0)
+    packing_df = pd.read_excel(packing_file, sheet_name=0)
 
-uploaded_order = st.file_uploader("Upload Order list.xlsx", type=["xlsx"])
-uploaded_packing = st.file_uploader("Upload Packing list.xlsx", type=["xlsx"])
+    # Remove zero quantity rows
+    packing_df = packing_df[packing_df["QUANTITY"] > 0].copy()
 
-if uploaded_packing and uploaded_order:
-    try:
-        # Load packing list
-        packing_df = pd.read_excel(uploaded_packing)
-        packing_df.columns = packing_df.columns.str.strip().str.upper().str.replace(" ", "")
-        
-        # Define standard column mapping for packing list
-        column_map_packing = {
-            "PARTDESC": "PARTDESC",
-            "QUANTITY": "QUANTITY",
-            "CARTONNO": "CARTONNO",
-            "REF1": "REF1",
-            "WEIGHT": "WEIGHT",
-            "NETVALUE": "NETVALUE",
-            "CRTNWEIGHT": "CRTNWEIGHT",
-            "MANFPART": "MANFPART"
-        }
+    # Calculate unit price from NETVALUE / QUANTITY
+    packing_df["UNIT PRICE"] = packing_df["NETVALUE"] / packing_df["QUANTITY"]
 
-        # Check all mapped columns exist in packing_df
-        for col in column_map_packing.keys():
-            if col not in packing_df.columns:
-                st.error(f"Packing list missing column: {col}")
-                st.stop()
+    # Ensure Brand column comes strictly from Order list
+    if "Brand" in order_df.columns:
+        if len(order_df) != len(packing_df):
+            raise ValueError("Row count mismatch: Order list and Packing list must have the same number of rows.")
+        packing_df["Brand"] = order_df["Brand"]
+    else:
+        raise ValueError("Order list.xlsx must contain 'Brand' column.")
 
-        # Keep only required columns
-        packing_df = packing_df[list(column_map_packing.keys())].copy()
+    # MANFPART: if blank, copy PARTNO
+    packing_df["MANFPART"] = packing_df["MANFPART"].fillna(packing_df["PARTNO"])
+    packing_df.loc[packing_df["MANFPART"].astype(str).str.strip() == "", "MANFPART"] = packing_df["PARTNO"]
 
-        # Remove zero quantity rows
-        packing_df = packing_df[packing_df["QUANTITY"] > 0].copy()
+    # Build final DataFrame using required column order
+    final_df = pd.DataFrame({
+        "SL.NO": range(1, len(packing_df) + 1),
+        "CARTONNO": packing_df["CARTONNO"],
+        "Brand": packing_df["Brand"],  # strictly from Order list
+        "PARTNO": packing_df["PARTNO"],
+        "PART DESC": packing_df["PARTDESC"],
+        "COO": "",  # left blank
+        "QTY": packing_df["QUANTITY"],
+        "REF1": packing_df["REF1"],
+        "WEIGHT": packing_df["WEIGHT"],
+        "HSCODE": "87089900",
+        "UNIT PRICE": packing_df["UNIT PRICE"],
+        "AMOUNT AED": packing_df["NETVALUE"],
+        "MANFPART": packing_df["MANFPART"],
+        "CRTN WEIGHT": packing_df["CRTNWEIGHT"],
+        "ORDER NUMBER": "",  # left blank
+        "REFERENCES": ""  # left blank
+    })
 
-        # Load Order list
-        order_df = pd.read_excel(uploaded_order)
-        order_df.columns = order_df.columns.str.strip().str.upper().str.replace(" ", "")
+    # Save output
+    final_df.to_excel(output_file, index=False)
+    print(f"Final packaging list generated: {output_file}")
 
-        # Check Order list has Partref and Brand
-        if "PARTREF" not in order_df.columns or "BRAND" not in order_df.columns:
-            st.error("Order list must contain 'Partref' and 'Brand' columns.")
-            st.stop()
 
-        # Prepare Order list for merge
-        order_df = order_df[["PARTREF", "BRAND"]].copy()
-        order_df = order_df.rename(columns={"PARTREF": "PARTNO", "BRAND": "BRAND"})
+if __name__ == "__main__":
+    # File names
+    order_file = "Order list.xlsx"
+    packing_file = "Packing list.xlsx"
+    output_file = "Final packaging list.xlsx"
 
-        # Add PARTNO and Brand to packing list
-        final_df = packing_df.copy()
-        if len(order_df) != len(final_df):
-            st.warning("Row count mismatch! Matching by order of rows.")
-        final_df["PARTNO"] = order_df["PARTNO"].values
-        final_df["Brand"] = order_df["BRAND"].values
-
-        # MANFPART: if blank, copy PARTNO
-        final_df["MANFPART"] = final_df["MANFPART"].fillna(final_df["PARTNO"])
-        final_df.loc[final_df["MANFPART"].astype(str).str.strip() == "", "MANFPART"] = final_df["PARTNO"]
-
-        # UNIT PRICE calculation
-        final_df["UNIT PRICE"] = final_df["NETVALUE"] / final_df["QUANTITY"]
-
-        # Add fixed columns
-        final_df["HSCODE"] = "87089900"
-        final_df["COO"] = ""
-        final_df["ORDER NUMBER"] = ""
-        final_df["REFERENCES"] = ""
-
-        # Reorder columns for final sheet
-        final_df = final_df[[
-            "PARTNO",
-            "Brand",
-            "PARTDESC",
-            "QUANTITY",
-            "CARTONNO",
-            "REF1",
-            "WEIGHT",
-            "MANFPART",
-            "CRTNWEIGHT",
-            "UNIT PRICE",
-            "NETVALUE",
-            "HSCODE",
-            "COO",
-            "ORDER NUMBER",
-            "REFERENCES"
-        ]]
-
-        # Add SL.NO
-        final_df.insert(0, "SL.NO", range(1, len(final_df) + 1))
-
-        # Rename columns to match final packaging list exactly
-        final_df = final_df.rename(columns={
-            "PARTDESC": "PART DESC",
-            "QUANTITY": "QTY",
-            "CRTNWEIGHT": "CRTN WEIGHT",
-            "NETVALUE": "AMOUNT AED",
-            "CARTONNO": "CARTONNO"
-        })
-
-        # Export to Excel in memory
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine="openpyxl") as writer:
-            final_df.to_excel(writer, index=False, sheet_name="Sheet1")
-        output.seek(0)
-
-        st.success("Final Packaging List Generated Successfully")
-        st.download_button(
-            label="Download Final Packaging List",
-            data=output,
-            file_name="Final packaging list.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-
-    except Exception as e:
-        st.error(f"Error: {e}")
+    generate_final_packing_list(order_file, packing_file, output_file)
 
 
