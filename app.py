@@ -56,7 +56,7 @@ if uploaded_packing:
                 "Partnumber": "PARTNO",
                 "PartNumber": "PARTNO",
                 "PARTNO": "PARTNO",
-                "Brand": "BRAND",
+                "Brand": "Brand",
                 "PRICE": "PRICE",
                 "Price": "PRICE"
             }
