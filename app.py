@@ -78,13 +78,8 @@ if uploaded_packing:
                 if "BRAND" in merged_df.columns:
                     merged_df["BRAND"] = merged_df["BRAND"]
                 else:
-                    merged_df["BRAND"] = ""
-            else:
-                st.warning("Order list.xlsx does not contain PARTNO — BRAND will be blank.")
-                merged_df = packing_df.copy()
-        else:
-            merged_df = packing_df.copy()
-
+                    merged_df["BRAND"] = "BRAND"
+          
         # MANFPART: if blank, copy PARTNO
         merged_df["MANFPART"] = merged_df["MANFPART"].fillna(merged_df["PARTNO"])
         merged_df.loc[merged_df["MANFPART"].astype(str).str.strip() == "", "MANFPART"] = merged_df["PARTNO"]
