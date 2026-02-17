@@ -3,9 +3,7 @@ import pandas as pd
 import io
 
 st.set_page_config(page_title="Final Packaging List Generator")
-
 st.title("Final Packaging List Generator")
-
 st.write("Upload both Excel files to generate the final packaging list.")
 
 uploaded_order = st.file_uploader("Upload Order list.xlsx", type=["xlsx"])
@@ -18,16 +16,16 @@ if uploaded_order and uploaded_packing:
         order_df = pd.read_excel(uploaded_order)
         packing_df = pd.read_excel(uploaded_packing)
 
-        # Clean column names (strip spaces + uppercase)
+        # Clean column names
         order_df.columns = order_df.columns.str.strip()
         packing_df.columns = packing_df.columns.str.strip()
 
         # Map actual Excel columns to standardized names
         column_map_order = {
-            "PartNumber": "PARTNO",
+            "Partnumber": "PARTNO",
             "Brand": "BRAND",
-            "MANFPART": "MANFPART",
             "Price": "PRICE"
+            # MANFPART intentionally ignored
         }
         order_df = order_df.rename(columns=column_map_order)
 
@@ -39,15 +37,16 @@ if uploaded_order and uploaded_packing:
             "Ref1": "REF1",
             "Weight": "WEIGHT",
             "NetValue": "NETVALUE",
-            "CrtWeight": "CRTNWEIGHT"
+            "CrtWeight": "CRTNWEIGHT",
+            "MANFPART": "MANFPART"  # Use from packing only
         }
         packing_df = packing_df.rename(columns=column_map_packing)
 
         # Required columns
-        required_order_cols = ["PARTNO", "BRAND", "MANFPART", "PRICE"]
+        required_order_cols = ["PARTNO", "BRAND", "PRICE"]  # MANFPART removed
         required_packing_cols = [
             "CARTONNO", "PARTNO", "PARTDESC", "QUANTITY",
-            "REF1", "WEIGHT", "NETVALUE", "CRTNWEIGHT"
+            "REF1", "WEIGHT", "NETVALUE", "CRTNWEIGHT", "MANFPART"
         ]
 
         # Validate columns
@@ -74,7 +73,8 @@ if uploaded_order and uploaded_packing:
 
         # Fallback handling
         merged_df["BRAND"] = merged_df["BRAND"].fillna(merged_df["BRAND_ORDER"])
-        merged_df["MANFPART"] = merged_df["MANFPART"].fillna(merged_df["MANFPART_ORDER"])
+        # MANFPART always from packing_df
+        merged_df["MANFPART"] = merged_df["MANFPART"]
 
         # Calculate UNIT PRICE
         merged_df["UNIT PRICE"] = merged_df["NETVALUE"] / merged_df["QUANTITY"]
@@ -117,4 +117,3 @@ if uploaded_order and uploaded_packing:
 
     except Exception as e:
         st.error(f"Error: {e}")
-
