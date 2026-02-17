@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import io
+import re
 
 st.set_page_config(page_title="Final Packaging List Generator")
 st.title("Final Packaging List Generator")
@@ -31,7 +32,7 @@ if uploaded_order and uploaded_packing:
             st.error("Order list.xlsx must contain 'Partref' and 'Brand' columns.")
             st.stop()
 
-        # Create a mapping: Partref -> Brand
+        # Create mapping: Partref -> Brand
         brand_map = order_df.set_index("Partref")["Brand"].to_dict()
 
         # Assign Brand to packing_df based on PARTNO
@@ -40,6 +41,9 @@ if uploaded_order and uploaded_packing:
         # MANFPART: if blank, copy PARTNO
         packing_df["MANFPART"] = packing_df["MANFPART"].fillna(packing_df["PARTNO"])
         packing_df.loc[packing_df["MANFPART"].astype(str).str.strip() == "", "MANFPART"] = packing_df["PARTNO"]
+
+        # Remove special characters from MANFPART
+        packing_df["MANFPART"] = packing_df["MANFPART"].astype(str).apply(lambda x: re.sub(r'[^A-Za-z0-9]', '', x))
 
         # Build final DataFrame
         final_df = pd.DataFrame({
